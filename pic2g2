@@ -1,0 +1,138 @@
+#!/usr/bin/env python
+from PIL import Image, ImageOps, ImageEnhance
+import numpy as np
+import skimage.measure
+from rich.progress import track as tqdm
+import argparse
+
+
+def makeSureBetweenZeroAndOne(num:str):
+    x = float(num)
+    assert x <= 1
+    assert x >= 0
+    return x
+
+parser = argparse.ArgumentParser(description='Take in an image and.')
+parser.add_argument('image',
+                    help='path to an image')
+parser.add_argument('--xMM', type=int, default=100,
+                    help='number of mm in the x dimension')
+                    
+parser.add_argument('--yMM', type=int,
+                    help='number of mm in the y dimension')
+
+parser.add_argument('--darkness', type=makeSureBetweenZeroAndOne, default=.99,
+                    help='a number between zero and one for how dark to print')
+
+parser.add_argument('--speed', type=int, default=3000,
+                    help='mm per minute')
+
+parser.add_argument('--maxPixels', type=int, default=900_000,
+                    help='we will downsample the image to reduce gcode size')
+parser.add_argument('--xOffset', type=int, default=0,
+                    help='what to treat as zero in the x direction')
+parser.add_argument('--yOffset', type=int, default=0,
+                    help='what to treat as zero in the y direction')
+parser.add_argument('--biDirectional', action='store_true', help='if you want to print in both directions')
+parser.add_argument('--output',
+                    help='where to write gcode')
+
+args = parser.parse_args()
+xOffset = args.xOffset
+yOffset = args.yOffset
+
+img = Image.open(args.image)
+gs = ImageOps.grayscale(img)
+
+enhancer = ImageEnhance.Contrast(gs)
+gs = enhancer.enhance(3)
+# gs.show()
+imgArray = np.array(gs)
+print('imgArray shape: ', imgArray.shape)
+print('lightest pixel: ', imgArray.min())
+print('darkest pixel: ', imgArray.max())
+# imgArray = np.clip(.5*(imgArray - 128) + 128, 0, 255)
+# Image.fromarray(imgArray).show()
+imgArray = (imgArray-imgArray.min())/imgArray.max() * 1000 * args.darkness
+
+while imgArray.shape[0]*imgArray.shape[1] > args.maxPixels:
+    imgArray = skimage.measure.block_reduce(imgArray, (2,2), np.min)
+    print('reduced to: ', imgArray.shape)
+
+
+
+
+gcode = [f'G0 X{xOffset} Y{yOffset} F{args.speed}', 'M4 S0']
+
+xMM = args.xMM
+yMM = args.yMM
+if yMM is None:
+    yMM = xMM * imgArray.shape[1] / imgArray.shape[0]
+print(f'xMM: {xMM}')
+print(f'yMM: {yMM}')
+
+xDelta = xMM / imgArray.shape[0]
+yDelta = yMM / imgArray.shape[1]
+print(f'xDelta: {xDelta}')
+print(f'yDelta: {yDelta}')
+black = 1000 * args.darkness
+lastColor = ''
+linesSaved = 0
+
+def makeGcode(gcode: str, imgArray: np.array, linesSaved=0, lastColor=''):
+    for r, row in enumerate(tqdm(imgArray)):
+        for c, col in enumerate(row):
+            if col == lastColor:
+                gcode.pop() #throw last line away
+                linesSaved = linesSaved + 1
+            lastColor = col
+            if black-col != 0:
+                new_line = f'G1 X{r*xDelta + xOffset} Y{c*yDelta + yOffset} F{args.speed} S{black - col}'
+            else:
+                new_line = f'G0 X{r*xDelta + xOffset} Y{c*yDelta + yOffset} F3000 S{black - col}'
+            gcode.append(new_line)
+        if gcode[-1].endswith('S0'): #if you ended lasering nothing, don't do it
+            gcode.pop()
+        lastColor = ''
+        gcode.append(f'G0 X{(r+1)*xDelta + xOffset} Y{yOffset} S0')
+    print('gcode len: ', len(gcode))
+    print('lines saved:', linesSaved)
+    return gcode
+
+def makeGcodeT(gcode: str, imgArray: np.array, linesSaved=0, lastColor=''):
+    for c, col in enumerate(tqdm(imgArray)):
+        for r, row in enumerate(col):
+            if row == lastColor:
+                gcode.pop() #throw last line away
+                linesSaved = linesSaved + 1
+            lastColor = row
+            if black-row != 0:
+                new_line = f'G1 X{r*xDelta + xOffset} Y{c*yDelta + yOffset} F{args.speed} S{black - row}'
+            else:
+                new_line = f'G0 X{r*xDelta + xOffset} Y{c*yDelta + yOffset} F3000 S{black - row}'
+            gcode.append(new_line)
+        if gcode[-1].endswith('S0'): #if you ended lasering nothing, don't do it
+            gcode.pop()
+        lastColor = ''
+        gcode.append(f'G0 X{xOffset} Y{(c+1)*yDelta + yOffset} S0')
+    print('gcode len: ', len(gcode))
+    print('lines saved:', linesSaved)
+    return gcode
+# makeGcodeFast = jit(makeGcode)
+
+gcode = makeGcode(gcode, imgArray)
+
+if args.biDirectional:
+    gcode.append(f'G0 X{xOffset} Y{yOffset} F{args.speed}')
+    gcode.append('M4 S0')
+    gcode = makeGcodeT(gcode, imgArray)
+#finally
+gcode.append('M5')
+filename = args.image+'.gcode'
+
+
+if args.output is not None:
+    filename = args.output
+print('writing to ', filename)
+with open(filename, 'w') as f:
+    f.writelines([x+'\n' for x in gcode])
