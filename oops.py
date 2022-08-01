@@ -1,6 +1,4 @@
 from collections import namedtuple
-from sys import ps1
-from this import d
 from typing import Iterable, List, Tuple
 import math
 import numpy as np
@@ -23,11 +21,11 @@ class Point:
     def __rmul__(self, other):
         return Point(self.x * other, self.y * other)
     
-    def __len__(self):
+    def length(self):
         return math.sqrt(self.x**2 + self.y**2)
     
     def normalize(self, mutate=False):
-        l = len(self)
+        l = self.length()
         if mutate:
             self.x /= l
             self.y /= l
@@ -61,10 +59,8 @@ class Line:
         return s1 + "\n" + s2 + "\n"
     
     def pointAtOffset(self, offset):
-        dx = self.p2.x - self.p1.x
-        dy = self.p2.y - self.p1.y
-        s = offset / len(self)
-        return Point(dx*s, dy*s)
+        unitDiff = (self.p2 - self.p1).normalize()
+        return self.p1 + (unitDiff * offset)
 
     def addTabs(self, offsets, lengths, thickness, innie=False):
         points = [self.p1]
@@ -74,6 +70,8 @@ class Line:
         b = 10
         a = -b*diff.y / diff.x
         unitPerp = Point(a,b).normalize()
+        if innie:
+            unitPerp = unitPerp*-1
         unit = (self.p2 - self.p1).normalize()
 
         for offset, length in zip(offsets, lengths):
@@ -87,8 +85,9 @@ class Line:
         lines = [Line(a,b) for a,b in zip(points, points[1:])]
         return lines
 
-    def __len__(self):
-        return len(self.p2 - self.p1)
+    def length(self):
+        diff = self.p2 - self.p1
+        return diff.length()
 
 
 class Polygon:
@@ -132,6 +131,8 @@ class Polygon:
             strings.append(l.gCode(s,h,intensity))
         return "\n".join(strings)
 
+
+
 class Rectangle(Polygon):
     
     def __init__(self, p1: Point, p2: Point):
@@ -150,24 +151,25 @@ class Box:
     def __init__(self, faces):
         self.faces = faces
     
-    def interlock(self, line1, line2, tabWidths=15, tabCount=3, thickness=5, padding=10):
+    @staticmethod
+    def interlock(line1, line2, tabWidths=15, tabCount=2, thickness=5, padding=20):
         """This method returns (lines1, lines2) 
         where lines1 is a list of lines meant to replace line1
         and lines2 is a list of lines meant to replace line2.
         This method is responsible for placing and spacing tabs.
         The actual generation of the lines is done in "addTab"
         """
-        assert abs(len(line1) - len(line2)) < 1, "Interlocking lines must be the same length!"
+        assert abs(line1.length() - line2.length()) < 1, "Interlocking lines must be the same length!"
 
         if isinstance(tabWidths, Iterable):
-            assert sum(tabWidths) < len(line1)-2*padding, "Tab widths cannot together exceed the length of the interlocking lines (minus 2*padding)!"
+            assert sum(tabWidths) < line1.length()-2*padding, "Tab widths cannot together exceed the length of the interlocking lines (minus 2*padding)!"
             raise NotImplementedError
         else:
-            assert tabWidths*tabCount < len(line1)-2*padding, "The space allocated for tabs cannot exceed the length of the interlocking lines (minus 2*padding)!"
+            assert tabWidths*tabCount < line1.length()-2*padding, "The space allocated for tabs cannot exceed the length of the interlocking lines (minus 2*padding)!"
             line2 = line2.flip() # <-- this is weird and has to be thought of more.
         
             # Evenly space tabs.
-            tabCenters = np.linspace(padding, len(line1) - padding, tabCount)
+            tabCenters = np.linspace(padding, line1.length() - padding, tabCount)
             offsets = [c-(tabWidths/2) for c in tabCenters]
             tabWidths = [tabWidths for _ in offsets]
 
