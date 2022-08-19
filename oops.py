@@ -31,6 +31,12 @@ class Point:
             self.y /= l
         else:
             return Point(self.x / l, self.y / l)
+        
+    def rotate(self, angle=math.pi/2, mutate=False):
+        if mutate:
+            self.x, self.y = self.x * math.cos(angle) - self.y * math.sin(angle), self.x * math.sin(angle) + self.y * math.cos(angle)
+        else:
+            return Point(self.x * math.cos(angle) - self.y * math.sin(angle), self.x * math.sin(angle) + self.y * math.cos(angle))
 
 ORIGIN = Point(0,0)
 
@@ -46,6 +52,13 @@ class Line:
             self.p2 = self.p2 + v
         else:
             return Line(self.p1 + v,self.p2 + v)
+    
+    def scale(self, scale, mutate=False):
+        if mutate:
+            self.p1 = self.p1 * scale
+            self.p2 = self.p2 * scale
+        else:
+            return Line(self.p1 * scale, self.p2 * scale)
     
     def flip(self, mutate=False):
         if mutate:
@@ -67,12 +80,10 @@ class Line:
 
         # Find a perpendicular unit vector (There's probably a better way)
         diff = self.p2 - self.p1
-        b = 10
-        a = -b*diff.y / diff.x
-        unitPerp = Point(a,b).normalize()
-        if innie:
-            unitPerp = unitPerp*-1
-        unit = (self.p2 - self.p1).normalize()
+        unit = (diff).normalize()
+        unitPerp = unit.rotate()
+        # if innie:
+        #     unitPerp = unitPerp*-1
 
         for offset, length in zip(offsets, lengths):
             tabVert1 = self.pointAtOffset(offset)
@@ -83,6 +94,12 @@ class Line:
         points.append(self.p2)
 
         lines = [Line(a,b) for a,b in zip(points, points[1:])]
+
+        if innie:
+            lines = [Line(self.p1, self.p1 + unitPerp)] + \
+                [x.translate(-1*unitPerp) for x in lines] + \
+                [Line(self.p2, self.p2 + unitPerp)]
+
         return lines
 
     def length(self):
@@ -101,6 +118,14 @@ class Polygon:
                 l.translate(v, mutate=True)
         else:
             return Polygon([line.translate(v, mutate=False) for line in self.lines])
+    
+    def scale(self, factor, mutate=False):
+        if mutate:
+            for l in self.lines:
+                l.p1 = l.p1 * factor
+                l.p2 = l.p2 * factor
+        else:
+            return Polygon([line.scale(factor, mutate=False) for line in self.lines])
 
     @staticmethod
     def regularPolygon(n: int, radius: float, center: Point):
@@ -173,8 +198,8 @@ class Box:
             offsets = [c-(tabWidths/2) for c in tabCenters]
             tabWidths = [tabWidths for _ in offsets]
 
-        lines1 = line1.addTabs(offsets, tabWidths, thickness)
-        lines2 = line2.addTabs(offsets, tabWidths, thickness, innie=True)
+        lines1 = line1.addTabs(offsets, tabWidths, thickness, innie=True,)
+        lines2 = line2.addTabs(offsets, tabWidths, thickness)
         return lines1, lines2
 
 

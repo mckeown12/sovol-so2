@@ -14,10 +14,12 @@ import IPython
 
 class Canvas:
 
-    def __init__(self, title="Window", width=1920, height=1080):
+    def __init__(self, title="Window", width=1920, height=1080, ppi=110):
         self.window = tkinter.Tk()
         self.window.title(title)
         self.window.geometry(f'{width}x{height}')
+        milisPerInch = 25.4
+        self.pixelsPerMilimeter = ppi / milisPerInch
 
         self.canvas = tkinter.Canvas(self.window)
         self.canvas.configure(bg="white")
@@ -33,7 +35,8 @@ class Canvas:
                 self.simulateLaser(l,s,h,i)
         
         else:
-            canvasLine = self.canvas.create_line(line.p1.x, line.p1.y, line.p2.x, line.p2.y)
+            s = self.pixelsPerMilimeter
+            canvasLine = self.canvas.create_line(line.p1.x*s, line.p1.y*s, line.p2.x*s, line.p2.y*s)
             RESOLUTION = 10
             sleepPerMilimiter = 1 / speed
             milimitersPerIteration = line.length() / RESOLUTION
@@ -42,7 +45,7 @@ class Canvas:
 
             for offset in np.linspace(0, line.length(), RESOLUTION):
                 p2 = line.pointAtOffset(offset)
-                self.canvas.coords(canvasLine, [line.p1.x, line.p1.y, p2.x, p2.y])
+                self.canvas.coords(canvasLine, [line.p1.x*s, line.p1.y*s, p2.x*s, p2.y*s])
                 # color = f"rgb({int((intensity/1000)*255)}, 0, 0)"
                 color = "black"
 
