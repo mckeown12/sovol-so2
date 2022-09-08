@@ -16,10 +16,10 @@ def SelectPrint(gcode, bedWidth, bedHeight):
 
     # Setup canvas and draw GCode
     c = Canvas("Select region to print")
-    c.drawGcode(gcode)
+    # c.drawGcode(gcode)
 
     # Evoke input from user to select lines
-    selection = c.performSelection()
+    selection = c.performSelection(gcode)
 
     #TODO: Edit gcode accordingly:
     keep = []
