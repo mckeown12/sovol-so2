@@ -3,11 +3,13 @@
 # Simulating printing with animations.           #
 ##################################################
 
+from functools import partial
 from oops import Polygon, Line, Point
 from typing import Iterable, List
 import tkinter
 import numpy as np
 import time
+import re
 import IPython
 
 
@@ -24,6 +26,53 @@ class Canvas:
         self.canvas = tkinter.Canvas(self.window)
         self.canvas.configure(bg="white")
         self.canvas.pack(fill="both", expand=True)
+
+
+    def performSelection(self):
+        # 1.) Scroll zooms
+        # 2.) click and drag pans
+        # 3.) shift-click and drag adds to selection
+        # 4.) ctrl-shift-click and drag removes from selection
+        # 5.) Selection is approved by the "Return/Enter" key.
+
+        shift = False
+        ctrl = False
+        selection = []
+        self.canvas.bind("<Button-1>", self.selectionHandler)
+        self.canvas.bind("<Key-Down>", self.selectionHandler)
+        self.canvas.bind("<Key-Up>", self.selectionHandler)
+        self.canvas.bind("<MouseWheel>", self.selectionHandler)
+        self.canvas.bind("<Return>", self.selectionHandler)
+
+        return [[0,0,100,100]] # as an example, just one rectangle from (0,0) to (100,100)
+
+    def selectionHandler(self, event):
+        print("Selection Handler")
+        
+
+    def drawGcode(self, gcode, position=(0,0)):
+
+        intensity = 0.0
+        for line in gcode.split("\n"):
+
+            intensityMatch = re.search(r"S([0-9\.]+)", line)
+            moveMatch = re.search(r"\s*(G0[01])\s*X([0-9\.]+)\s*Y([0-9\.]+)", line)
+
+            if intensityMatch:
+                intensity = float(intensityMatch[1])
+            
+            if moveMatch:
+                x1,y1,x2,y2 = [*position, float(moveMatch[2])*self.pixelsPerMilimeter, float(moveMatch[3])*self.pixelsPerMilimeter]     
+                # x1,y1,x2,y2 = [*position, moveMatch[2:4]]          
+                self.canvas.create_line(x1,y1,x2,y2)
+                position = x2,y2
+        
+        self.window.update()
+
+
+        time.sleep(10)
+
+
 
 
     def simulateLaser(self, line: Line, speed: int, height: int, intensity: int):
