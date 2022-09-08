@@ -9,6 +9,7 @@ from typing import Iterable, List
 import tkinter
 import numpy as np
 import time
+import re
 import IPython
 
 
@@ -49,8 +50,29 @@ class Canvas:
         print("Selection Handler")
         
 
-    def drawGcode(self, gcode):
-        pass
+    def drawGcode(self, gcode, position=(0,0)):
+
+        intensity = 0.0
+        for line in gcode.split("\n"):
+
+            intensityMatch = re.search(r"S([0-9\.]+)", line)
+            moveMatch = re.search(r"\s*(G0[01])\s*X([0-9\.]+)\s*Y([0-9\.]+)", line)
+
+            if intensityMatch:
+                intensity = float(intensityMatch[1])
+            
+            if moveMatch:
+                x1,y1,x2,y2 = [*position, float(moveMatch[2])*self.pixelsPerMilimeter, float(moveMatch[3])*self.pixelsPerMilimeter]     
+                # x1,y1,x2,y2 = [*position, moveMatch[2:4]]          
+                self.canvas.create_line(x1,y1,x2,y2)
+                position = x2,y2
+        
+        self.window.update()
+
+
+        time.sleep(10)
+
+
 
 
     def simulateLaser(self, line: Line, speed: int, height: int, intensity: int):
