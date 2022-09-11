@@ -12,6 +12,18 @@ def inRect(x1,y1, x2,y2, x3,y3):
     return (xmin <= x1 and x1 <= xmax) and (ymin <= y1 and y1 <= ymax)
 
 
+def inSelection(x,y, selection):
+    answer = False
+    for subtract, (x1,y1,x2,y2) in selection:
+        if inRect(x,y, x1,y1,x2,y2):
+            if subtract:
+                answer = False
+            else:
+                answer = True
+    return answer
+
+
+
 def SelectPrint(gcode, bedWidth, bedHeight):
 
     # Setup canvas and draw GCode
@@ -28,7 +40,7 @@ def SelectPrint(gcode, bedWidth, bedHeight):
         
         if match:
             mode, x, y = match[1],float(match[2]), float(match[3])
-            if any([inRect(x,y, x1,y1,x2,y2) for x1,y1,x2,y2 in selection]):
+            if inSelection(x,y, selection):
                 keep.append((mode,x,y))
         else:
             keep.append(line)

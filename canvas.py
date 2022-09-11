@@ -29,10 +29,21 @@ class Canvas:
         self.canvas.pack(fill="both", expand=True)
 
         self.shift = False
-        self.ctrl = False
         self.alt = False
         self.clickStart = None
-        self.selection = [[0,0,100,100]]
+        self.selectRect = None
+        self.selection = []
+
+
+    def printToCanvas(self, x,y):
+        newX = x * self.pixelsPerMilimeter * self.scale + self.offset[0]
+        newY = y * self.pixelsPerMilimeter * self.scale + self.offset[1]
+        return newX, newY
+
+    def canvasToPrint(self, x,y):
+        newX = (x - self.offset[0]) / (self.pixelsPerMilimeter * self.scale)
+        newY = (y - self.offset[1]) / (self.pixelsPerMilimeter * self.scale)
+        return newX, newY
 
 
     def performSelection(self, gcode):
@@ -67,49 +78,95 @@ class Canvas:
             self.window.update()
             self.canvas.delete("all")
             self.drawGcode(gcode)
-            time.sleep(0.001)
+            self.drawSelection()
+            time.sleep(0.01)
 
         return self.selection # as an example, just one rectangle from (0,0) to (100,100)
 
 
+    def drawSelection(self):
+        if self.selectRect is not None:
+            color = "red" if self.selectionParity else "green"
+            self.canvas.create_rectangle(*self.selectRect, outline=color)
+
+        for rect in self.selection:
+            parity, coords = rect
+            color = "red" if parity else "green"
+            print(coords)
+            coords = (
+                *self.printToCanvas(*coords[:2]),
+                *self.printToCanvas(*coords[2:])
+            )
+            self.canvas.create_rectangle(*coords, outline=color)
+
 
     def selectionHandler(self, event: tkinter.Event):
         if event.type is tkinter.EventType.ButtonPress:
-            print(f"ButtonPress: {event.num}")
             if event.num == 4: # scroll up
                 self.scale *= 1.02
             elif event.num == 5: # scroll down
                 self.scale *= 0.98
-            elif event.num == 1:
+            elif event.num == 1: # left mouse button
+                print("click")
                 self.clickStart = (event.x, event.y)
                 self.oldOffset = self.offset
+                if self.shift:
+                    self.selectionParity = False
+                    self.selectRect = [event.x, event.y, event.x, event.y]
+                elif self.alt:
+                    self.selectionParity = True
+                    self.selectRect = [event.x, event.y, event.x, event.y]
+
         
         elif event.type is tkinter.EventType.ButtonRelease:
-            print(f"ButtonRelease: {event.num}")
+            print("un-click")
             if event.num == 1:
                 self.clickStart = None
 
+                selection = (
+                    *self.canvasToPrint(*self.selectRect[:2]),
+                    *self.canvasToPrint(*self.selectRect[2:])
+                )
+                selection = (self.selectionParity, selection)
+                self.selection.append(selection)
+
+                self.selectionParity = None
+                self.selectRect = None
+
         elif event.type is tkinter.EventType.KeyPress:
-            print(f"KeyPress: {event.keycode}")
             if event.keycode == 36: # Return
                 self.selecting = False
-            if event.keycode == "64": # Alt
+            if event.keycode == 64: # Alt
+                print("alt")
                 self.alt = True
+            if event.keycode == 50: # Shift
+                print("shift")
+                self.shift = True
+
 
         elif event.type is tkinter.EventType.KeyRelease:
             print(f"KeyRelease: {event.keycode}")
 
-            if event.keycode == "64": # Alt
+            if event.keycode == 64: # Alt
+                print("un-alt")
                 self.alt = False
+            if event.keycode == 50: # Shift
+                print("un-shift")
+                self.shift = False
 
 
         elif event.type is tkinter.EventType.Motion:
-            print(f"Motion: {event.x} {event.y}")
+
             if self.clickStart is not None:
-                dx = event.x - self.clickStart[0]
-                dy = event.y - self.clickStart[1]
-                self.offset = (self.oldOffset[0] + dx, self.oldOffset[1] + dy)
-        
+                if self.selectRect is not None:
+                    print("Updating Coords of Rectangle")
+                    self.selectRect[2:] = [event.x, event.y]
+                    # self.canvas.coords(self.selectRect, [*self.clickStart, event.x, event.y])
+                else:
+                    dx = event.x - self.clickStart[0]
+                    dy = event.y - self.clickStart[1]
+                    self.offset = (self.oldOffset[0] + dx, self.oldOffset[1] + dy)
+
 
         else:
             print(f"Other")
@@ -130,8 +187,9 @@ class Canvas:
             
             if moveMatch:
                 x1,y1 = position
-                x2 = float(moveMatch[2]) * self.pixelsPerMilimeter * self.scale + self.offset[0], 
-                y2 = float(moveMatch[3]) * self.pixelsPerMilimeter * self.scale + self.offset[1]
+                x2, y2 = self.printToCanvas(float(moveMatch[2]), float(moveMatch[3]))
+                # x2 = float(moveMatch[2]) * self.pixelsPerMilimeter * self.scale + self.offset[0], 
+                # y2 = float(moveMatch[3]) * self.pixelsPerMilimeter * self.scale + self.offset[1]
 
                 color = "blue" if intensity > 500 else "red"   
                 self.canvas.create_line(x1,y1,x2,y2, fill=color)
