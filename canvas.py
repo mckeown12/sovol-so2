@@ -53,6 +53,7 @@ class Canvas:
         # 4.) ctrl-shift-click and drag removes from selection
         # 5.) Selection is approved by the "Return/Enter" key.
 
+        self.canvas.bind_all("<MouseWheel>", self.selectionHandler)
         self.canvas.bind_all("<Return>", self.selectionHandler)
         self.canvas.bind_all("<Shift-KeyPress>", self.selectionHandler)
         self.canvas.bind_all("<Control-KeyPress>", self.selectionHandler)
@@ -116,7 +117,8 @@ class Canvas:
                 elif self.alt:
                     self.selectionParity = True
                     self.selectRect = [event.x, event.y, event.x, event.y]
-
+        elif event.type is tkinter.EventType.MouseWheel:
+            self.scale *= 1 + (.01*event.delta)
         
         elif event.type is tkinter.EventType.ButtonRelease:
             print("un-click")
@@ -134,12 +136,13 @@ class Canvas:
                 self.selectRect = None
 
         elif event.type is tkinter.EventType.KeyPress:
-            if event.keycode == 36: # Return
+            print(event.state)
+            if event.keycode == 36 or event.keysym=='Return': # Return
                 self.selecting = False
-            if event.keycode == 64: # Alt
+            if event.keycode == 64 or event.state==16: # Alt
                 print("alt")
                 self.alt = True
-            if event.keycode == 50: # Shift
+            if event.keycode == 50 or event.state==1: # Shift
                 print("shift")
                 self.shift = True
 
@@ -147,10 +150,10 @@ class Canvas:
         elif event.type is tkinter.EventType.KeyRelease:
             print(f"KeyRelease: {event.keycode}")
 
-            if event.keycode == 64: # Alt
+            if event.keycode == 64 or event.state==16: # Alt
                 print("un-alt")
                 self.alt = False
-            if event.keycode == 50: # Shift
+            if event.keycode == 50 or event.state==1: # Shift
                 print("un-shift")
                 self.shift = False
 
